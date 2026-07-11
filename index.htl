@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Supabase Selfie Upload</title>
+
+<style>
+body{
+    font-family:Arial,sans-serif;
+    background:#f5f5f5;
+    text-align:center;
+    padding:30px;
+}
+
+video,img{
+    width:400px;
+    max-width:100%;
+    border:2px solid #444;
+    border-radius:10px;
+    transform:scaleX(-1);
+    display: none;
+    
+}
+
+button{
+    margin-topvideo:20px;
+    padding:12px 25px;
+    font-size:16px;
+    cursor:pointer;
+}
+
+canvas{
+    display:none;
+}
+
+#status{
+    margin-top:20px;
+    font-weight:bold;
+    white-space:pre-wrap;
+}
+</style>
+
+</head>
+<body>
+
+<h2>Capture Selfie</h2>
+
+<video id="video" autoplay playsinline></video>
+
+<br>
+
+<!-- <button id="captureBtn">Capture Selfie</button> -->
+
+<h3>Preview</h3>
+
+<img id="preview">
+
+<canvas id="canvas"></canvas>
+
+<div id="status"></div>
+
+<script type="module">
+
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const supabase = createClient(
+    "https://pldtbqblrcgroqovepnm.supabase.co",
+    "sb_publishable_t9r_bVWcfRNMQC6NH6ZJmg_xh2imFjD"
+);
+
+let stream;
+
+const video = document.getElementById("video");
+const canvas = document.getElementById("canvas");
+const preview = document.getElementById("preview");
+// const captureBtn = document.getElementById("captureBtn");
+const status = document.getElementById("status");
+
+async function startCamera() {
+
+    try {
+
+        stream = await navigator.mediaDevices.getUserMedia({
+            video: {
+                facingMode: "user"
+            },
+            audio: false
+        });
+
+        video.srcObject = stream;
+
+        // Wait until camera starts streaming
+        video.onloadedmetadata = () => {
+
+            video.play();
+
+            // Give camera time to adjust focus/exposure
+            setTimeout(() => {
+                captureAndUpload();
+            }, 1000);
+
+        };
+
+    } catch (err) {
+
+        console.error(err);
+        alert("Unable to access camera.");
+
+    }
+
+}
+
+async function uploadSelfie(base64Image){
+
+    status.innerHTML = "Uploading...";
+
+    const { data, error } = await supabase
+        .from("selfies")
+        .insert([
+            {
+                image: base64Image
+            }
+        ])
+        .select();
+
+    console.log("Data:", data);
+    console.log("Error:", error);
+
+    if(error){
+
+        status.innerHTML =
+            "❌ Upload Failed\n\n" +
+            JSON.stringify(error,null,2);
+
+        return;
+    }
+
+    status.innerHTML="✅ Uploaded Successfully";
+
+}
+
+
+async function captureAndUpload() {
+
+    const width = video.videoWidth;
+    const height = video.videoHeight;
+
+    if (!width || !height) {
+        console.log("Camera not ready");
+        return;
+    }
+
+    canvas.width = width;
+    canvas.height = height;
+
+    const ctx = canvas.getContext("2d");
+
+    // Mirror image
+    ctx.save();
+    ctx.translate(width, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(video, 0, 0, width, height);
+    ctx.restore();
+
+    const base64Image = canvas.toDataURL("image/jpeg", 0.9);
+
+    preview.src = base64Image;
+
+    if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+        video.srcObject = null;
+    }
+
+    await uploadSelfie(base64Image);
+}
+
+startCamera();
+
+</script>
+
+</body>
+</html>
